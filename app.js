@@ -34,6 +34,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         // Tampilkan Landing Page
         if (landingPageEl) landingPageEl.style.display = 'flex';
         if (playerPageEl) playerPageEl.style.display = 'none';
+
+        // Aktifkan Smart Link pada interaksi tombol di Landing Page
+        setupLandingPageAds();
         return;
     } else {
         // Tampilkan Player Page
@@ -135,17 +138,10 @@ document.addEventListener('DOMContentLoaded', async function () {
         statusEl.style.display = 'none';
         if (videoContainer) videoContainer.style.display = 'block';
 
-        // Tampilkan overlay selalu (pancingan agresif)
+        // Tampilkan overlay selalu (pancingan agresif untuk play pertama)
         if (overlay1) {
             overlay1.style.display = 'flex';
         }
-
-        // Load Lazy Ads
-        document.querySelectorAll('.lazy-ad').forEach(iframe => {
-            if (iframe.dataset.src && !iframe.src) {
-                iframe.src = iframe.dataset.src;
-            }
-        });
 
         // Event listener saat user pause dari kontrol bawaan HTML5 atau drag timeline (seeking)
         if (mainVideo) {
@@ -157,7 +153,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
             mainVideo.addEventListener('play', function () {
                 if (overlay1) overlay1.style.display = 'none';
-                // Trigger Smart Link ketika play (dengan cooldown)
+                // Trigger Smart Link ketika play
                 triggerSmartLink(false);
             });
 
@@ -182,7 +178,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 });
 
 // ==========================================
-// SMART LINK & POPUNDER MONETAG HELPER
+// SMART LINK MONETAG HELPER
 // ==========================================
 let lastSmartLinkTrigger = 0;
 
@@ -192,32 +188,28 @@ function getSmartLinkUrl() {
 
 function triggerSmartLink(allowRedirect = false) {
     const url = getSmartLinkUrl();
-    if (!url) return;
+    if (!url) {
+        console.warn('[Monetag] URL Smart Link belum diisi di config.js.');
+        return;
+    }
 
-    // Cooldown 1 detik agar tidak spam popup / double-trigger
+    // Cooldown 1 detik agar tidak membuka terlalu banyak popup sekaligus
     const now = Date.now();
     if (now - lastSmartLinkTrigger < 1000) return;
     lastSmartLinkTrigger = now;
 
     try {
+        console.log('[Monetag] Membuka Smart Link:', url);
         const popWin = window.open(url, '_blank');
-        if (popWin) {
-            popWin.blur();
-            window.focus();
-        } else {
-            if (allowRedirect) {
-                console.log('Smart Link terblokir popup blocker browser. Mengarahkan langsung.');
-                window.location.href = url;
-            } else {
-                console.log('Smart Link terblokir popup blocker.');
-            }
+        if (!popWin && allowRedirect) {
+            window.location.href = url;
         }
     } catch (err) {
-        console.log('Gagal membuka Smart Link:', err);
+        console.error('[Monetag] Gagal membuka Smart Link:', err);
     }
 }
 
-// Alias untuk kompatibilitas fungsi lama
+// Alias untuk kompatibilitas
 function triggerPopunder(url, allowRedirect = true) {
     triggerSmartLink(allowRedirect);
 }
@@ -236,6 +228,15 @@ function setupAdOverlays(mainVideo) {
             }
         });
     }
+}
+
+// Setup iklan di Landing Page (jika dibuka tanpa parameter video)
+function setupLandingPageAds() {
+    document.querySelectorAll('#landing-page a, #landing-page button').forEach(el => {
+        el.addEventListener('click', function () {
+            triggerSmartLink(false);
+        });
+    });
 }
 
 // ==========================================
@@ -303,15 +304,14 @@ function renderRecommendations(videos) {
         const views = Number(video.views || 0).toLocaleString('id-ID');
 
         const card = document.createElement('a');
-        // Gunakan parameter query agar gampang me-refresh player
         card.href = `?v=${video.slug}`;
         card.className = 'rec-card';
 
-        // Tambahkan event click untuk mentrigger Smart Link Monetag
+        // Event click untuk mentrigger Smart Link Monetag
         card.addEventListener('click', function (e) {
             e.preventDefault();
             triggerSmartLink(false);
-            // Berikan jeda sejenak agar browser memproses pembukaan tab baru sebelum berpindah halaman
+            // Delay 100ms agar browser memproses pembukaan tab iklan sebelum redirect
             setTimeout(() => {
                 window.location.href = card.href;
             }, 100);
